@@ -36,7 +36,8 @@ LICENSE:
 #define MIDI_BAUD_RATE 31250
 #define MIDI_TYPE_MASK 0xF0
 #define MIDI_CHANNEL_MASK 0x0F
-#define OMNI 99
+#define OMNI 0
+#define MIDI_MIDDLE_C_OFFSET 60
 
 /**************    CONSTANTS, MACROS, & DATA STRUCTURES    ***************/
 typedef enum midi_msg_type {
@@ -178,11 +179,10 @@ typedef void (*midi_func_t)(uint8_t *data, uint16_t count);
  * Function :    midi_device_create()
  * Purpose  :    Creates and initializes a new MIDI device
  *               Registers the MIDI new MIDI device
- * Input    :    uint8_t reg - Boolean value. Should device be registered
- *                             immediately?
+ * Input    :    void
  * Returns  :    struct midi_device *
  *************************************************************************/
-struct midi_device *midi_device_create(uint8_t reg)
+struct midi_device *midi_device_create()
 {
     struct midi_device *dev = (struct midi_device *)calloc(1,
                               sizeof(struct midi_device));
@@ -233,9 +233,6 @@ struct midi_device *midi_device_create(uint8_t reg)
     dev->output.active_sensing_send = NULL;
     dev->output.reset_send = NULL;
     dev->output.midi_send_byte_func = NULL;
-    if (reg) {
-        midi_register_device(dev);
-    }
     return dev;
 }
 /*************************************************************************
@@ -531,13 +528,13 @@ void midi_note_off_send(struct midi_device *d, uint8_t channel, uint8_t *data,
                         uint16_t count)
 {
     uint8_t status = 0x80 | channel;
-    d->midi_send_byte_func(status);
+    d->output.midi_send_byte_func(status);
     if (count < 2) {
         /* ERROR: Data buffer is of incorrect size for message */
         return;
     }
-    d->midi_send_byte_func(data[0]);
-    d->midi_send_byte_func(data[1]);
+    d->output.midi_send_byte_func(data[0]);
+    d->output.midi_send_byte_func(data[1]);
 }
 
 /*************************************************************************
@@ -546,16 +543,17 @@ void midi_note_off_send(struct midi_device *d, uint8_t channel, uint8_t *data,
  * Input    :    struct midi_device *, uint8_t channel, uint8_t key, uint8_t vel
  * Returns  :    void
  *************************************************************************/
-void midi_note_on_send(struct midi_device *d, uint8_t status, uint8_t *data, uint16_t count)
+void midi_note_on_send(struct midi_device *d, uint8_t status, uint8_t *data,
+                       uint16_t count)
 {
     uint8_t status = 0x90 | channel;
-    d->midi_send_byte_func(status);
+    d->output.midi_send_byte_func(status);
     if (count < 2) {
         /* ERROR: Data buffer is of incorrect size for message */
         return;
     }
-    d->midi_send_byte_func(data[0]);
-    d->midi_send_byte_func(data[1]);
+    d->output.midi_send_byte_func(data[0]);
+    d->output.midi_send_byte_func(data[1]);
 }
 
 /*************************************************************************
@@ -565,12 +563,12 @@ void midi_note_on_send(struct midi_device *d, uint8_t status, uint8_t *data, uin
  * Returns  :    void
  *************************************************************************/
 void midi_aftertouch_send(struct midi_device *d, uint8_t channel, uint8_t *data,
-                        uint16_t count)
+                          uint16_t count)
 {
     uint8_t status = 0xA0 | channel;
-    d->midi_send_byte_func(status);
-    d->midi_send_byte_func(key);
-    d->midi_send_byte_func(pres);
+    d->output.midi_send_byte_func(status);
+    d->output.midi_send_byte_func(key);
+    d->output.midi_send_byte_func(pres);
 }
 
 /*************************************************************************
@@ -579,13 +577,14 @@ void midi_aftertouch_send(struct midi_device *d, uint8_t channel, uint8_t *data,
  * Input    :    struct midi_device *, uint8_t channel, uint8_t num, uint8_t val
  * Returns  :    void
  *************************************************************************/
-void midi_control_change_send(struct midi_device *d, uint8_t channel, uint8_t *data,
-                        uint16_t count)
+void midi_control_change_send(struct midi_device *d, uint8_t channel,
+                              uint8_t *data,
+                              uint16_t count)
 {
     uint8_t status = 0xB0 | channel;
-    d->midi_send_byte_func(status);
-    d->midi_send_byte_func(num);
-    d->midi_send_byte_func(val);
+    d->output.midi_send_byte_func(status);
+    d->output.midi_send_byte_func(num);
+    d->output.midi_send_byte_func(val);
 }
 
 /*************************************************************************
@@ -594,13 +593,14 @@ void midi_control_change_send(struct midi_device *d, uint8_t channel, uint8_t *d
  * Input    :    struct midi_device *, uint8_t channel, uint8_t num
  * Returns  :    void
  *************************************************************************/
-void midi_program_change_send(struct midi_device *d, uint8_t channel, uint8_t *data,
-                        uint16_t count)
+void midi_program_change_send(struct midi_device *d, uint8_t channel,
+                              uint8_t *data,
+                              uint16_t count)
 {
     uint8_t status = 0xC0 | channel;
-    d->midi_send_byte_func(status);
-    d->midi_send_byte_func(key);
-    d->midi_send_byte_func(vel);
+    d->output.midi_send_byte_func(status);
+    d->output.midi_send_byte_func(key);
+    d->output.midi_send_byte_func(vel);
 }
 
 /*************************************************************************
@@ -609,13 +609,14 @@ void midi_program_change_send(struct midi_device *d, uint8_t channel, uint8_t *d
  * Input    :    struct midi_device *, uint8_t channel, uint8_t pres
  * Returns  :    void
  *************************************************************************/
-void midi_channel_pressure_send(struct midi_device *d, uint8_t channel, uint8_t *data,
-                        uint16_t count)
+void midi_channel_pressure_send(struct midi_device *d, uint8_t channel,
+                                uint8_t *data,
+                                uint16_t count)
 {
     uint8_t status = 0xD0 | channel;
-    d->midi_send_byte_func(status);
-    d->midi_send_byte_func(key);
-    d->midi_send_byte_func(vel);
+    d->output.midi_send_byte_func(status);
+    d->output.midi_send_byte_func(key);
+    d->output.midi_send_byte_func(vel);
 }
 
 /*************************************************************************
@@ -625,12 +626,12 @@ void midi_channel_pressure_send(struct midi_device *d, uint8_t channel, uint8_t 
  * Returns  :    void
  *************************************************************************/
 void midi_pitch_bend_send(struct midi_device *d, uint8_t channel, uint8_t *data,
-                        uint16_t count)
+                          uint16_t count)
 {
     uint8_t status = 0xE0 | channel;
-    d->midi_send_byte_func(status);
-    d->midi_send_byte_func(hval);
-    d->midi_send_byte_func(lval);
+    d->output.midi_send_byte_func(status);
+    d->output.midi_send_byte_func(hval);
+    d->output.midi_send_byte_func(lval);
 }
 
 /*************************************************************************
@@ -642,9 +643,9 @@ void midi_pitch_bend_send(struct midi_device *d, uint8_t channel, uint8_t *data,
 void midi_all_sound_off_send(struct midi_device *d, uint_t channel)
 {
     uint8_t status = 0xB0 | channel;
-    d->midi_send_byte_func(status);
-    d->midi_send_byte_func(120);
-    d->midi_send_byte_func(0);
+    d->output.midi_send_byte_func(status);
+    d->output.midi_send_byte_func(120);
+    d->output.midi_send_byte_func(0);
 }
 
 /*************************************************************************
@@ -657,9 +658,9 @@ void midi_reset_all_controllers_send(struct midi_device *d, uint8_t channel,
                                      uint8_t val)
 {
     uint8_t status = 0xB0 | channel;
-    d->midi_send_byte_func(status);
-    d->midi_send_byte_func(121);
-    d->midi_send_byte_func(val);
+    d->output.midi_send_byte_func(status);
+    d->output.midi_send_byte_func(121);
+    d->output.midi_send_byte_func(val);
 }
 
 /*************************************************************************
@@ -671,13 +672,13 @@ void midi_reset_all_controllers_send(struct midi_device *d, uint8_t channel,
 void midi_local_control_send(struct midi_device *d, uint8_t val)
 {
     uint8_t status = 0xB0 | channel;
-    d->midi_send_byte_func(status);
-    d->midi_send_byte_func(122);
+    d->output.midi_send_byte_func(status);
+    d->output.midi_send_byte_func(122);
     if (val > 0) {
-        d->midi_send_byte_func(127);
+        d->output.midi_send_byte_func(127);
     }
     else {
-        d->midi_send_byte_func(0);
+        d->output.midi_send_byte_func(0);
     }
 }
 
@@ -690,9 +691,9 @@ void midi_local_control_send(struct midi_device *d, uint8_t val)
 void midi_all_notes_off_send(struct midi_device *d)
 {
     uint8_t status = 0xB0 | channel;
-    d->midi_send_byte_func(status);
-    d->midi_send_byte_func(120);
-    d->midi_send_byte_func(0);
+    d->output.midi_send_byte_func(status);
+    d->output.midi_send_byte_func(120);
+    d->output.midi_send_byte_func(0);
 }
 
 /*************************************************************************
